@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Web2Apk 云端打包</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root { --bg:#0f1115; --card:#1b1f27; --fg:#e6e8ec; --mut:#9aa3b2; --acc:#1f6feb; --ok:#2ecc71; --err:#ff5c5c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    padding:16px; max-width:560px; margin:0 auto; }
+  h1 { font-size:20px; margin:8px 0 4px; }
+  .sub { color:var(--mut); font-size:13px; margin-bottom:16px; }
+  .card { background:var(--card); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .card h2 { font-size:15px; margin:0 0 12px; color:var(--acc); }
+  label { display:block; font-size:13px; color:var(--mut); margin:10px 0 4px; }
+  input[type=text], input[type=url], input[type=password], select {
+    width:100%; padding:11px 12px; border-radius:10px; border:1px solid #2c323d;
+    background:#11141a; color:var(--fg); font-size:15px; }
+  input[type=color] { width:100%; height:42px; border-radius:10px; border:1px solid #2c323d; background:#11141a; padding:4px; }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; }
+  .checks label { display:flex; align-items:center; gap:10px; color:var(--fg); font-size:14px; margin:8px 0; }
+  .checks input { width:18px; height:18px; accent-color:var(--acc); }
+  button { width:100%; padding:14px; border:none; border-radius:12px; background:var(--acc);
+    color:#fff; font-size:16px; font-weight:600; margin-top:6px; cursor:pointer; }
+  button:disabled { opacity:.5; }
+  .status { margin-top:14px; padding:12px; border-radius:10px; font-size:14px; background:#11141a;
+    border:1px solid #2c323d; white-space:pre-wrap; line-height:1.5; }
+  .ok { color:var(--ok); } .err { color:var(--err); }
+  .hint { font-size:12px; color:var(--mut); line-height:1.6; margin-top:8px; }
+  a { color:var(--acc); }
+  .dl { display:block; text-align:center; background:var(--ok); }
+</style>
+</head>
+<body>
+  <h1>📦 Web2Apk 云端打包</h1>
+  <div class="sub">手机浏览器填网址 → 云端自动编译签名 → 下载独立 APK</div>
+
+  <div class="card">
+    <h2>① GitHub 配置（仅首次，自动记住）</h2>
+    <label>仓库 Owner</label>
+    <input id="owner" type="text" placeholder="你的 GitHub 用户名" />
+    <label>仓库名</label>
+    <input id="repo" type="text" placeholder="Web2ApkVideo" />
+    <label>分支</label>
+    <input id="branch" type="text" placeholder="main" />
+    <label>Personal Access Token (PAT)</label>
+    <input id="pat" type="password" placeholder="需要 repo + workflow 权限" />
+    <div class="hint">PAT 仅存在本机浏览器 localStorage，不上传任何服务器。
+      经典令牌需勾选 <b>repo</b> 与 <b>workflow</b>；细粒度令牌需 Actions 与 Workflows 读写权限。</div>
+  </div>
+
+  <div class="card">
+    <h2>② 应用配置</h2>
+    <label>目标网址 *</label>
+    <input id="url" type="text" placeholder="www.bilibili.com" />
+    <label>应用名称 *</label>
+    <input id="name" type="text" placeholder="我的视频站" />
+    <div class="row">
+      <div>
+        <label>主题色</label>
+        <input id="theme" type="color" value="#1f6feb" />
+      </div>
+      <div>
+        <label>UA 模式</label>
+        <select id="ua">
+          <option value="mobile">手机版</option>
+          <option value="desktop">桌面版（规避移动端阉割）</option>
+        </select>
+      </div>
+    </div>
+    <label>图标图片 URL（可选，留空用默认）</label>
+    <input id="icon" type="url" placeholder="https://.../icon.png" />
+    <label>自定义包名（可选，如 com.my.app）</label>
+    <input id="pkg" type="text" placeholder="留空用默认 com.web2apk.video" />
+    <div class="checks">
+      <label><input id="multi" type="checkbox" /> 允许同手机装多个（自动改包名）</label>
+      <label><input id="f_gesture" type="checkbox" checked /> 全屏沉浸 + 手势（亮度/音量）</label>
+      <label><input id="f_pip" type="checkbox" checked /> 画中画小窗</label>
+      <label><input id="f_bg" type="checkbox" checked /> 后台继续播放声音</label>
+      <label><input id="f_ad" type="checkbox" checked /> 广告/弹窗拦截</label>
+      <label><input id="f_dl" type="checkbox" checked /> 视频缓存与下载</label>
+    </div>
+  </div>
+
+  <button id="go">🚀 开始打包</button>
+  <div id="status" class="status" style="display:none"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const LS = window.localStorage;
+['owner','repo','branch','pat'].forEach(k=>{ const v=LS.getItem('w2a_'+k); if(v) $(k).value=v; });
+if(!$('branch').value) $('branch').value='main';
+
+function setStatus(t, cls){ const s=$('status'); s.style.display='block'; s.className='status'+(cls?' '+cls:''); s.textContent=t; }
+function saveCfg(){ ['owner','repo','branch','pat'].forEach(k=>LS.setItem('w2a_'+k, $(k).value.trim())); }
+
+async function api(path, opt={}){
+  const pat=$('pat').value.trim();
+  const res=await fetch('https://api.github.com'+path, Object.assign({
+    headers:{ 'Authorization':'Bearer '+pat, 'Accept':'application/vnd.github+json' }
+  }, opt));
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.message||('HTTP '+res.status));
+  return data;
+}
+
+async function start(){
+  saveCfg();
+  const owner=$('owner').value.trim(), repo=$('repo').value.trim(), branch=$('branch').value.trim();
+  const pat=$('pat').value.trim();
+  if(!owner||!repo||!pat){ setStatus('请先填写 GitHub 配置（Owner / Repo / PAT）。','err'); return; }
+  const url=$('url').value.trim(), name=$('name').value.trim();
+  if(!url||!name){ setStatus('网址和应用名称为必填。','err'); return; }
+
+  const feats=[];
+  if($('f_gesture').checked) feats.push('fullscreenGesture');
+  if($('f_pip').checked) feats.push('pip');
+  if($('f_bg').checked) feats.push('backgroundAudio');
+  if($('f_ad').checked) feats.push('adBlock');
+  if($('f_dl').checked) feats.push('videoDownload');
+
+  const inputs={
+    app_url:url, app_name:name, theme_color:$('theme').value,
+    ua_mode:$('ua').value, custom_ua:'', features:feats.join(','),
+    package_name:$('pkg').value.trim(),
+    allow_multiple:$('multi').checked?'true':'false',
+    icon_url:$('icon').value.trim()
+  };
+
+  $('go').disabled=true;
+  try{
+    await api('/repos/'+owner+'/'+repo+'/actions/workflows/build.yml/dispatches', {
+      method:'POST', body: JSON.stringify({ ref:branch, inputs })
+    });
+    setStatus('已触发云端构建，正在轮询进度…（首次约 3-6 分钟）','ok');
+    poll(owner, repo, Date.now());
+  }catch(e){
+    setStatus('触发失败：'+e.message,'err');
+    $('go').disabled=false;
+  }
+}
+
+async function poll(owner, repo, triggerTime){
+  try{
+    const data=await api('/repos/'+owner+'/'+repo+'/actions/runs?event=workflow_dispatch&per_page=20');
+    const runs=(data.workflow_runs||[]).filter(r=> new Date(r.created_at).getTime() >= triggerTime-15000);
+    if(!runs.length){ setStatus('等待工作流启动…'); return loop(); }
+    const run=runs.sort((a,b)=> new Date(b.created_at)-new Date(a.created_at))[0];
+    if(run.status==='completed'){
+      if(run.conclusion==='success'){ setStatus('✅ 构建成功，正在获取 APK…','ok'); await fetchArtifact(owner,repo,run.id); }
+      else { setStatus('❌ 构建失败：'+run.conclusion+'。请到 Actions 查看日志。','err'); addManual(run.html_url); }
+      $('go').disabled=false; return;
+    }
+    setStatus('⏳ 构建中… 状态：'+run.status+'（已运行 '+Math.max(1,Math.round((Date.now()-triggerTime)/1000))+'s）');
+    return loop();
+  }catch(e){
+    setStatus('轮询出错：'+e.message+'（可稍后到 Actions 页面手动下载）','err');
+    $('go').disabled=false;
+  }
+  function loop(){ setTimeout(()=>poll(owner,repo,triggerTime), 5000); }
+}
+
+async function fetchArtifact(owner,repo,runId){
+  try{
+    const arts=await api('/repos/'+owner+'/'+repo+'/actions/runs/'+runId+'/artifacts');
+    const art=(arts.artifacts||[])[0];
+    if(!art) throw new Error('未找到产物');
+    const blob=await fetch(art.archive_download_url,{ headers:{'Authorization':'Bearer '+$('pat').value.trim()}, redirect:'follow'}).then(r=>r.blob());
+    const zip=await JSZip.loadAsync(blob);
+    const apkName=Object.keys(zip.files).find(n=>n.endsWith('.apk'));
+    if(!apkName) throw new Error('压缩包内无 APK');
+    const apk=await zip.files[apkName].async('blob');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(apk); a.download=(art.name||'app')+'.apk'; a.click();
+    setStatus('🎉 APK 已下载：'+(art.name||'app')+'.apk\n如未自动保存，请检查浏览器下载权限。','ok');
+  }catch(e){
+    setStatus('自动下载失败：'+e.message+'。可到 Actions 页面手动下载产物。','err');
+    addManual('https://github.com/'+owner+'/'+repo+'/actions/runs/'+runId);
+  }
+}
+
+function addManual(url){
+  const s=$('status'); const a=document.createElement('a'); a.href=url; a.target='_blank'; a.textContent='\n👉 打开 Actions 页面手动下载'; s.appendChild(document.createTextNode('')); s.appendChild(a);
+}
+
+$('go').addEventListener('click', start);
+</script>
+</body>
+</html>

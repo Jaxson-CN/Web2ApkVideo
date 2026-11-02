@@ -1,0 +1,6 @@
+# Web2ApkVideo 打包工具仅依赖 Python 标准库（tkinter 随 Python 自带），无需额外安装。
+# 运行环境要求：
+#   - Python 3.8+
+#   - Java 运行时（JRE 8+，apktool / 签名器依赖）
+#   - tools/apktool.jar、tools/uber-apk-signer.jar、tools/web2apk.keystore（由 get_tools.bat 获取）
+#   - builder/base.apk（由 android-base 工程一次性编译）

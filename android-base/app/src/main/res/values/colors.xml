@@ -1,0 +1,5 @@
+<resources>
+    <color name="colorPrimary">#1f6feb</color>
+    <color name="colorAccent">#1f6feb</color>
+    <color name="toolbar_bg">#1b1b1b</color>
+</resources>

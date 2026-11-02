@@ -1,0 +1,14 @@
+{
+  "startUrl": "https://www.bilibili.com",
+  "appName": "WebApp",
+  "uaMode": "mobile",
+  "customUserAgent": "",
+  "features": {
+    "fullscreenGesture": true,
+    "pip": true,
+    "backgroundAudio": true,
+    "adBlock": true,
+    "videoDownload": true
+  },
+  "themeColor": "#1f6feb"
+}

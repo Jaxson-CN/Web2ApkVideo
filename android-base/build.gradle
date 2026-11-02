@@ -1,0 +1,2 @@
+// Web2ApkVideo 基础工程（仅作为生成 base.apk 的一次性来源，日常打包免 SDK）
+// 插件版本在 app/build.gradle 中声明。
