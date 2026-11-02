@@ -52,14 +52,12 @@ jobs:
           cache: gradle
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
         run: |
+          if [ -z "$ANDROID_HOME" ]; then export ANDROID_HOME=/usr/local/lib/android/sdk; fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           SM=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
-          if [ -z "$SM" ]; then SM=$(ls "$ANDROID_HOME"/cmdline-tools/latest/bin/sdkmanager 2>/dev/null | head -1); fi
-          if [ -z "$SM" ]; then SM=$(ls "$ANDROID_HOME"/tools/bin/sdkmanager 2>/dev/null | head -1); fi
           echo "sdkmanager=$SM"
+          if [ -z "$SM" ]; then echo "::error::未找到 sdkmanager"; exit 1; fi
           yes | "$SM" --licenses >/dev/null 2>&1 || true
           "$SM" "platforms;android-34" "build-tools;34.0.0"
 
@@ -81,7 +79,7 @@ jobs:
         uses: gradle/gradle-build-action@v3
         with:
           build-root-directory: android-base
-          gradle-version: "8.0"
+          gradle-version: "8.2"
           arguments: assembleRelease --no-daemon
 
       - name: Sign APK
