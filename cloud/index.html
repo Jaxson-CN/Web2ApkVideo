@@ -137,21 +137,21 @@ async function start(){
       method:'POST', body: JSON.stringify({ ref:branch, inputs })
     });
     setStatus('已触发云端构建，正在轮询进度…（首次约 3-6 分钟）','ok');
-    poll(owner, repo, Date.now());
+    poll(owner, repo, Date.now(), name);
   }catch(e){
     setStatus('触发失败：'+e.message,'err');
     $('go').disabled=false;
   }
 }
 
-async function poll(owner, repo, triggerTime){
+async function poll(owner, repo, triggerTime, appName){
   try{
     const data=await api('/repos/'+owner+'/'+repo+'/actions/runs?event=workflow_dispatch&per_page=20');
     const runs=(data.workflow_runs||[]).filter(r=> new Date(r.created_at).getTime() >= triggerTime-15000);
     if(!runs.length){ setStatus('等待工作流启动…'); return loop(); }
     const run=runs.sort((a,b)=> new Date(b.created_at)-new Date(a.created_at))[0];
     if(run.status==='completed'){
-      if(run.conclusion==='success'){ setStatus('✅ 构建成功，正在获取 APK…','ok'); await fetchArtifact(owner,repo,run.id); }
+      if(run.conclusion==='success'){ setStatus('✅ 构建成功，正在获取 APK…','ok'); await fetchArtifact(owner,repo,run.id,appName); }
       else { setStatus('❌ 构建失败：'+run.conclusion+'。请到 Actions 查看日志。','err'); addManual(run.html_url); }
       $('go').disabled=false; return;
     }
@@ -161,10 +161,10 @@ async function poll(owner, repo, triggerTime){
     setStatus('轮询出错：'+e.message+'（可稍后到 Actions 页面手动下载）','err');
     $('go').disabled=false;
   }
-  function loop(){ setTimeout(()=>poll(owner,repo,triggerTime), 5000); }
+  function loop(){ setTimeout(()=>poll(owner,repo,triggerTime,appName), 5000); }
 }
 
-async function fetchArtifact(owner,repo,runId){
+async function fetchArtifact(owner,repo,runId,appName){
   try{
     const arts=await api('/repos/'+owner+'/'+repo+'/actions/runs/'+runId+'/artifacts');
     const art=(arts.artifacts||[])[0];
@@ -174,8 +174,9 @@ async function fetchArtifact(owner,repo,runId){
     const apkName=Object.keys(zip.files).find(n=>n.endsWith('.apk'));
     if(!apkName) throw new Error('压缩包内无 APK');
     const apk=await zip.files[apkName].async('blob');
-    const a=document.createElement('a'); a.href=URL.createObjectURL(apk); a.download=(art.name||'app')+'.apk'; a.click();
-    setStatus('🎉 APK 已下载：'+(art.name||'app')+'.apk\n如未自动保存，请检查浏览器下载权限。','ok');
+    const dlName=(appName||'app').replace(/[^\w\u4e00-\u9fa5.-]/g,'_')||'app';
+    const a=document.createElement('a'); a.href=URL.createObjectURL(apk); a.download=dlName+'.apk'; a.click();
+    setStatus('🎉 APK 已下载：'+dlName+'.apk\n如未自动保存，请检查浏览器下载权限。','ok');
   }catch(e){
     setStatus('自动下载失败：'+e.message+'。可到 Actions 页面手动下载产物。','err');
     addManual('https://github.com/'+owner+'/'+repo+'/actions/runs/'+runId);

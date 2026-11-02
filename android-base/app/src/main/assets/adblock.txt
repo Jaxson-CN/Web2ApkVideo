@@ -1,4 +1,10 @@
-# Web2ApkVideo 内置广告/追踪域名拦截表（支持子域名匹配，如 ad.example.com）
+# Web2ApkVideo 内置广告/追踪域名拦截表
+# 规则：仅拦截明确的广告联盟与行为追踪域名；绝不拦截 googleapis.com / gstatic.com /
+# facebook.com / yandex.ru 等内容或基础设施域名，否则会连 YouTube 等视频站一起废掉。
+# 匹配方式（见 MainActivity.isBlocked）：host 完全相等，或 host 以 "." + 规则 结尾。
+# 支持以 # 开头的注释行。
+
+# ---- Google 广告/分析（与播放无关，可安全拦截）----
 doubleclick.net
 googlesyndication.com
 googleadservices.com
@@ -9,6 +15,11 @@ adservice.google.com
 pagead2.googlesyndication.com
 ad.doubleclick.net
 pubads.g.doubleclick.net
+stats.g.doubleclick.net
+partner.googleadservices.com
+static.doubleclick.net
+
+# ---- 常见广告联盟 / 程序化广告 ----
 adsystem.com
 adnxs.com
 rubiconproject.com
@@ -20,7 +31,6 @@ outbrain.com
 scorecardresearch.com
 quantserve.com
 moatads.com
-adform.net
 openx.net
 smartadserver.com
 spotx.tv
@@ -38,24 +48,8 @@ adcolony.com
 vungle.com
 chartboost.com
 unityads.unity3d.com
-facebook.com
-connect.facebook.net
-analytics.tiktok.com
-stats.g.doubleclick.net
-adservice.google.com
-static.doubleclick.net
-partner.googleadservices.com
-gstatic.com
-googleapis.com
-adblock
-adtimed
-adnxs
-prebid
-adsafeprotected.com
-moatads
-pixel.quantserve.com
-sb.scorecardresearch.com
-wpad
+
+# ---- 弹窗/挂马广告网络 ----
 popads.net
 popcash.net
 propellerads.com
@@ -65,24 +59,21 @@ zedo.com
 ligatus.com
 admixer.net
 adriver.ru
-yandex.ru
-top.mail.ru
-metrica.yandex.com
-xn--80adikfbijbwg.xn--p1ai
-adfox.ru
 advmaker.net
 adlabs.net
 adwolf
 betweendigital.com
+
+# ---- 行为与营销分析（隐私向，不影响播放）----
 segment.com
 amplitude.com
 mixpanel.com
 hotjar.com
 fullstory.com
 clarity.ms
-pixel
-beacon
-tracking
-adsense
-admob
-adcolony
+analytics.tiktok.com
+metrica.yandex.com
+top.mail.ru
+pixel.quantserve.com
+sb.scorecardresearch.com
+adsafeprotected.com

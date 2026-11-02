@@ -1,0 +1,130 @@
+name: Build APK (Cloud)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: "目标网址（自动补 https）"
+        required: true
+      app_name:
+        description: "App 显示名称"
+        required: true
+      theme_color:
+        description: "主题色 #RRGGBB"
+        required: false
+        default: "#1f6feb"
+      ua_mode:
+        description: "User-Agent 模式"
+        required: false
+        default: "mobile"
+      custom_ua:
+        description: "自定义 UA（留空则用预设）"
+        required: false
+        default: ""
+      features:
+        description: "启用的视频功能（逗号分隔）"
+        required: false
+        default: "fullscreenGesture,pip,backgroundAudio,adBlock,videoDownload"
+      package_name:
+        description: "自定义包名（可选，需合法，如 com.my.app）"
+        required: false
+        default: ""
+      allow_multiple:
+        description: "是否自动改包名以便同手机装多个"
+        required: false
+        default: "false"
+      icon_url:
+        description: "图标图片 URL（可选，留空用默认）"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          SM=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          if [ -z "$SM" ]; then SM=$(ls "$ANDROID_HOME"/cmdline-tools/latest/bin/sdkmanager 2>/dev/null | head -1); fi
+          if [ -z "$SM" ]; then SM=$(ls "$ANDROID_HOME"/tools/bin/sdkmanager 2>/dev/null | head -1); fi
+          echo "sdkmanager=$SM"
+          yes | "$SM" --licenses >/dev/null 2>&1 || true
+          "$SM" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Inject config
+        run: |
+          pip install Pillow -q
+          python3 cloud/inject_config.py \
+            --url "${{ inputs.app_url }}" \
+            --name "${{ inputs.app_name }}" \
+            --theme "${{ inputs.theme_color }}" \
+            --ua "${{ inputs.ua_mode }}" \
+            --custom-ua "${{ inputs.custom_ua }}" \
+            --features "${{ inputs.features }}" \
+            --package "${{ inputs.package_name }}" \
+            --allow-multiple "${{ inputs.allow_multiple }}" \
+            --icon-url "${{ inputs.icon_url }}"
+
+      - name: Build APK
+        uses: gradle/gradle-build-action@v3
+        with:
+          build-root-directory: android-base
+          gradle-version: "8.0"
+          arguments: assembleRelease --no-daemon
+
+      - name: Sign APK
+        env:
+          APP_NAME: ${{ inputs.app_name }}
+        run: |
+          KS_B64="${{ secrets.KEYSTORE_BASE64 }}"
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > /tmp/release.keystore
+            KS_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
+            KEY_ALIAS="${{ secrets.KEY_ALIAS }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          else
+            echo "::warning::未配置 KEYSTORE_BASE64，使用临时 debug 密钥签名（无法覆盖安装/上架）"
+            keytool -genkey -v -keystore /tmp/release.keystore -alias debugkey \
+              -keyalg RSA -keysize 2048 -validity 3650 \
+              -storepass android -keypass android \
+              -dname "CN=Debug,O=Debug,C=US" -noprompt
+            KS_PASS="android"; KEY_ALIAS="debugkey"; KEY_PASS="android"
+          fi
+
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          UNSIGNED="android-base/app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [ ! -f "$UNSIGNED" ]; then
+            echo "::error::未找到未签名 APK"; find android-base/app/build -name '*.apk' || true
+            exit 1
+          fi
+
+          "$BT/zipalign" -v -p 4 "$UNSIGNED" /tmp/aligned.apk
+          "$BT/apksigner" sign \
+            --ks /tmp/release.keystore --ks-pass "pass:$KS_PASS" \
+            --ks-key-alias "$KEY_ALIAS" --key-pass "pass:$KEY_PASS" \
+            --out signed.apk /tmp/aligned.apk
+          "$BT/apksigner" verify signed.apk
+
+          SAFE=$(printf '%s' "$APP_NAME" | tr -c 'A-Za-z0-9_-' '_')
+          echo "APK_NAME=${SAFE}" >> "$GITHUB_ENV"
+          ls -la signed.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ github.run_id }}
+          path: signed.apk
+          if-no-files-found: error
+          retention-days: 7
