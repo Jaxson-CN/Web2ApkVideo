@@ -91,7 +91,7 @@ jobs:
             echo "$KS_B64" | base64 -d > /tmp/release.keystore
             KS_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
             KEY_ALIAS="${{ secrets.KEY_ALIAS }}"
-            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+            KEY_PASS="$KS_PASS"
           else
             echo "::warning::未配置 KEYSTORE_BASE64，使用临时 debug 密钥签名（无法覆盖安装/上架）"
             keytool -genkey -v -keystore /tmp/release.keystore -alias debugkey \
