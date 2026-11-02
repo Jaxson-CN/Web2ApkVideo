@@ -163,8 +163,6 @@ public class MainActivity extends android.app.Activity {
         ws.setMediaPlaybackRequiresUserGesture(false);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         ws.setCacheMode(WebSettings.LOAD_DEFAULT);
-        ws.setAppCacheEnabled(true);
-        ws.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
         ws.setAllowFileAccess(false);
         ws.setJavaScriptCanOpenWindowsAutomatically(false);
         try { ws.setOffscreenPreRaster(true); } catch (Exception ignore) {}
